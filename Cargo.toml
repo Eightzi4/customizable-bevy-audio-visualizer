@@ -1,0 +1,26 @@
+[package]
+name = "customizable-bevy-audio-visualizer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = { version = "0.13.1", features = ["dynamic_linking"] }
+bevy-inspector-egui = "0.23.4"
+bevy_rapier2d = "0.25.0"
+rand = "0.8.5"
+ringbuffer = "0.15.0"
+cpal = "0.15.3"
+audio-visualizer = "0.4.0"
+spectrum-analyzer = "1.5.0"
+
+[workspace]
+resolver = "2"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+#[target.x86_64-pc-windows-msvc]
+#rustflags = ["-Ctarget-feature=+crt-static"]
