@@ -5,6 +5,7 @@ use bevy::{
     prelude::*, window::PrimaryWindow
 };
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy_rapier2d::na::clamp;
 use cpal::{
     self,
     traits::{DeviceTrait, HostTrait, StreamTrait},
@@ -33,7 +34,7 @@ fn main() {
         .init_resource::<AudioVisualizerUpdateTimer>()
         //.add_systems(PreUpdate, measure_fps)// uncomment to measure fps
         .add_systems(Startup, (setup_audio_data_updater, setup_audio_visualizer, spawn_camera))
-        .add_systems(Update, (tick_audio_visulaizer_update_timer, visualize_audio_frequency, update_audio_visualizer_position))
+        .add_systems(Update, (tick_audio_visulaizer_update_timer, visualize_audio_frequency_symmetrical, update_audio_visualizer_scale, update_audio_visualizer_rotation))
         .run();
 }
 
@@ -41,7 +42,9 @@ const COLUMN_COUNT: usize = 256;
 const SPECTRUM_DATA_LENGTH: usize = 8192;
 const RADIUS: f64 = 200.0;
 const ANGLE_INCREMENT: f64 = 2.0 * PI / COLUMN_COUNT as f64;
-const SMOOTHING: usize = 8;
+const FREQUENCIES_COMBINATION_SMOOTHING: usize = 4;
+const AV_BEAT_SCALE_SMOOTHING: f32 = 0.5;
+const AV_ROTATION_SPEED: f32 = 0.005;
 
 #[derive(Resource)]
 struct AudioVisualizerUpdateTimer{
@@ -258,24 +261,22 @@ fn visualize_audio_frequency(
                 }
             }
             for (i, (mut style, mut background_color)) in column_query.iter_mut().enumerate() {
+                let mut smooth_frequency = 0.0;
+                let mut index: i32 = (i as i32 - (FREQUENCIES_COMBINATION_SMOOTHING / 2) as i32 + COLUMN_COUNT as i32) % COLUMN_COUNT as i32;
+                for _ in 0..FREQUENCIES_COMBINATION_SMOOTHING {
+                    smooth_frequency += combined_frequencies[index as usize];
+                    index = (index + 1) % COLUMN_COUNT as i32;
+                }
+                combined_frequencies[i] = smooth_frequency / FREQUENCIES_COMBINATION_SMOOTHING as f32;
+
+                let new_height = combined_frequencies[i] / 10.0 * max_height / frequencies.max().1.val();
+                
+                style.height = Val::Px(clamp(new_height, 2.0, 200.0));
+
                 if combined_frequencies[i] / 10.0 > frequencies.average().val() * 2.0 {
                     background_color.0 = Color::RED;
                 } else {
                     background_color.0 = Color::BLACK;
-                }
-
-                let mut smooth_frequency = 0.0;
-                let mut index: i32 = (i as i32 - (SMOOTHING / 2) as i32 + COLUMN_COUNT as i32) % COLUMN_COUNT as i32;
-                for _ in 0..SMOOTHING {
-                    smooth_frequency += combined_frequencies[index as usize];
-                    index = (index + 1) % COLUMN_COUNT as i32;
-                }
-                combined_frequencies[i] = smooth_frequency / SMOOTHING as f32;
-                let new_height = combined_frequencies[i] / 10.0 * max_height / frequencies.max().1.val();
-                if new_height > 2.0 {
-                    style.height = Val::Px(new_height);
-                } else {
-                    style.height = Val::Px(2.0);
                 }
             }
         } else {
@@ -284,7 +285,74 @@ fn visualize_audio_frequency(
     }
 }
 
-fn update_audio_visualizer_position(
+fn visualize_audio_frequency_symmetrical(
+    mut audio_data: NonSendMut<AudioData>,
+    mut column_query: Query<(&mut Style, &mut BackgroundColor), With<InnerAudioVisualizerCollumn>>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+    audio_visualizer_update_timer: ResMut<AudioVisualizerUpdateTimer>
+) {
+    if audio_visualizer_update_timer.timer.just_finished() {
+        let spectrum_data = audio_data.latest_audio_data.lock().unwrap();
+        
+        if spectrum_data.len() == SPECTRUM_DATA_LENGTH {
+            let window = window_query.get_single().unwrap();
+
+            let max_height = window.height();
+
+            let spectrum_data_clone: [f32; 8192] = spectrum_data.iter().copied().collect::<Vec<f32>>().try_into().unwrap();
+            drop(spectrum_data);
+
+            //let hann_window = hann_window(&spectrum_data_clone);
+
+            let frequencies = samples_fft_to_spectrum(
+                //&hann_window,
+                &spectrum_data_clone,
+                4096,
+                FrequencyLimit::Range(20.0, 1300.0),
+                Some(&scale_to_zero_to_one),
+            ).unwrap();
+
+            audio_data.latest_average_frequency_value = frequencies.average().val();
+
+            let mut combined_frequencies: [f32; COLUMN_COUNT / 2] = [0.0; COLUMN_COUNT / 2];
+            for i in 0..COLUMN_COUNT / 2 {
+                for j in i * 10..(i + 1) * 10 {
+                    combined_frequencies[i] += frequencies.data().get(j).unwrap().1.val();
+                }
+            }
+            for (i, (mut style, mut background_color)) in column_query.iter_mut().enumerate() {
+                let clamped_index = i % (COLUMN_COUNT / 2);
+            
+                let new_height;
+                if i < COLUMN_COUNT / 2 {
+                    let mut smooth_frequency = 0.0;
+                    let mut index: i32 = (clamped_index as i32 - (FREQUENCIES_COMBINATION_SMOOTHING / 2) as i32 + COLUMN_COUNT as i32 / 2) % (COLUMN_COUNT / 2) as i32;
+                    for _ in 0..FREQUENCIES_COMBINATION_SMOOTHING {
+                        smooth_frequency += combined_frequencies[index as usize];
+                        index = (index + 1) % (COLUMN_COUNT / 2) as i32;
+                    }
+                    combined_frequencies[clamped_index] = smooth_frequency / FREQUENCIES_COMBINATION_SMOOTHING as f32;
+                    new_height = combined_frequencies[clamped_index] / 10.0 * max_height / frequencies.max().1.val();
+                } else {
+                    let opposite_index = (i - COLUMN_COUNT / 2) % (COLUMN_COUNT / 2);
+                    new_height = combined_frequencies[opposite_index] / 10.0 * max_height / frequencies.max().1.val();
+                }
+            
+                style.height = Val::Px(clamp(new_height, 2.0, 200.0));
+            
+                if combined_frequencies[clamped_index] / 10.0 > frequencies.average().val() * 2.0 {
+                    background_color.0 = Color::RED;
+                } else {
+                    background_color.0 = Color::BLACK;
+                }
+            }
+        } else {
+            println!("Not enough data to visualize!");
+        }
+    }
+}
+
+fn update_audio_visualizer_scale(
     audio_data: NonSend<AudioData>,
     mut audio_visulizer_container_query: Query<&mut Style, With<OuterAudioVisualizerCollumn>>,
     window_query: Query<&Window, With<PrimaryWindow>>,
@@ -294,19 +362,26 @@ fn update_audio_visualizer_position(
         let window_height = window_query.single().height();
         let radius_scaler = audio_data.latest_average_frequency_value as f64 * 1000.0;
         for (i, mut style) in audio_visulizer_container_query.iter_mut().enumerate() {
+            let current_scale_x = style.left.resolve(1.0, Vec2::new(1.0, 1.0)).unwrap();
+            let current_scale_y = style.top.resolve(1.0, Vec2::new(1.0, 1.0)).unwrap();
             let angle = i as f64 * ANGLE_INCREMENT;
             let x = ((RADIUS + radius_scaler) * angle.cos()) as f32 + window_height / 2.0;
             let y = ((RADIUS + radius_scaler) * angle.sin()) as f32 + window_height / 2.0;
-            style.left = Val::Px(x);
-            style.top = Val::Px(y);
+
+            style.left = Val::Px((x - current_scale_x) * AV_BEAT_SCALE_SMOOTHING + current_scale_x);
+            style.top = Val::Px((y - current_scale_y) * AV_BEAT_SCALE_SMOOTHING + current_scale_y);
         }
     }
 }
 
-fn spin_audio_visualizer(
-    audio_data: NonSend<AudioData>,
-    mut audio_visulizer_container_query: Query<&mut Style, With<AudioVisualizerContainer>>
+fn update_audio_visualizer_rotation(
+    //audio_data: NonSend<AudioData>,
+    mut audio_visulizer_container_query: Query<&mut Transform, With<AudioVisualizerContainer>>,
+    audio_visualizer_update_timer: ResMut<AudioVisualizerUpdateTimer>
 ) {
-    let spectrum_data = audio_data.latest_audio_data.lock().unwrap();
-    let audio_visualizer_container = audio_visulizer_container_query.get_single_mut().unwrap();
+    if audio_visualizer_update_timer.timer.just_finished() {
+        //let latest_average_frequency_value = audio_data.latest_average_frequency_value;
+        let mut audio_visualizer_container = audio_visulizer_container_query.get_single_mut().unwrap();
+        audio_visualizer_container.rotation *= Quat::from_rotation_z(AV_ROTATION_SPEED);
+    }
 }
