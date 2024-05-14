@@ -6,7 +6,7 @@ use crate::visualizer::*;
 use super::components::*;
 
 
-const FIXED_ARRAY_SIZE_2: usize = 1024; // I've decided to use large array instead of vector, may not be the right choice tho.
+const FIXED_ARRAY_SIZE_1: usize = 1024; // I've decided to use large array instead of vector, may not be the right choice tho.
  
 pub fn setup_audio_visualizer(
     mut commands: Commands,
@@ -113,7 +113,7 @@ pub fn visualize_audio_spectrum(
             let max_height = window.height();
 
             let mut highest_spectrum_value = 0.0;
-            let mut combined_spectrums: [f32; FIXED_ARRAY_SIZE_2] = [0.0; FIXED_ARRAY_SIZE_2];
+            let mut combined_spectrums: [f32; FIXED_ARRAY_SIZE_1] = [0.0; FIXED_ARRAY_SIZE_1];
             let sum_range = spectrum_data.len() / audio_visualizer_settings.column_count;
             for i in 0..audio_visualizer_settings.column_count {
                 for j in i * sum_range..(i + 1) * sum_range {
@@ -176,7 +176,7 @@ pub fn visualize_audio_frequency(
 
             audio_data.latest_average_frequency_value = frequencies.average().val();
 
-            let mut combined_frequencies: [f32; FIXED_ARRAY_SIZE_2] = [0.0; FIXED_ARRAY_SIZE_2];
+            let mut combined_frequencies: [f32; FIXED_ARRAY_SIZE_1] = [0.0; FIXED_ARRAY_SIZE_1];
             let sum_range = frequencies.data().len() / audio_visualizer_settings.column_count;
             for i in 0..audio_visualizer_settings.column_count / audio_visualizer_settings.section_count {
                 for j in i * sum_range..(i + 1) * sum_range {
