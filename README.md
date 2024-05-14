@@ -13,4 +13,5 @@ It features many options to customize it to your liking (as you can see in pictu
 - **Scale Threshold** - smooths the transitions between scaling
 - **Color settings** - colors of columns/highlighted column/background (with HDR option)
 - **FPS settings** - VSync/Show FPS (requires to be applied by clicking the button)
+  
 ![avs](https://github.com/Eightzi4/customizable-bevy-audio-visualizer/assets/111708236/a693f107-d6db-4931-94a2-a2b23ce13f62)
