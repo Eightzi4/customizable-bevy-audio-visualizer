@@ -29,6 +29,6 @@ It features many options to customize it to your liking (as you can see in the p
 
 ## Advanced Settings
 - **Show FPS** - shows current FPS of the application (requires to be applied by clicking the button, the FPS of the audio visualizer is capped at 32 FPS)
-- ** VSync** - synchronizes the FPS with the refresh rate of the monitor (requires to be applied by clicking the button)
+- **VSync** - synchronizes the FPS with the refresh rate of the monitor (requires to be applied by clicking the button)
   
 ![avs](https://github.com/Eightzi4/customizable-bevy-audio-visualizer/assets/111708236/a693f107-d6db-4931-94a2-a2b23ce13f62)
