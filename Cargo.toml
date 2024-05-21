@@ -5,8 +5,8 @@ version = "1.0.0"
 edition = "2021"
 
 [dependencies]
-#bevy = { version = "0.13.2", features = ["dynamic_linking"] } # comment when compiling for release
-bevy = "0.13.2" # uncomment when compiling for release
+#bevy = { version = "0.13.2", features = ["dynamic_linking"] }
+bevy = "0.13.2"
 bevy-inspector-egui = "0.24.0"
 rand = "0.8.5"
 ringbuffer = "0.15.0"
